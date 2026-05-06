@@ -1,15 +1,19 @@
-module.exports = {
-  version: 1,
-  builds: [
+{
+  "version": 1,
+  "builds": [
     {
-      src: "server.js",
-      use: "@vercel/node"
+      "src": "api/**/*.js",
+      "use": "@vercel/node"
     }
   ],
-  routes: [
+  "routes": [
     {
-      src: "/(.*)",
-      dest: "server.js"
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/api/static.js"
     }
   ]
 }
