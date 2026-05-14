@@ -11,15 +11,21 @@ input.value = "";
 const typing = addMessage("Typing...", "bot");
 
 try {
-const res = await fetch("/api/chat", {
-method: "POST",
-headers: { "Content-Type": "application/json" },
-body: JSON.stringify({ message })
-});
+const res = await fetch("/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message })
+  });
 
-const data = await res.json();
-typing.remove();
-addMessage(data.reply, "bot");
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    typing.innerText = errorData.error || "Error sending message";
+    return;
+  }
+
+  const data = await res.json();
+  typing.remove();
+  addMessage(data.reply, "bot");
 
 } catch (err) {
 typing.innerText = "Error...";
