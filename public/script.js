@@ -10,28 +10,34 @@ input.value = "";
 
 const typing = addMessage("Typing...", "bot");
 
-try {
-const res = await fetch("/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message })
-  });
-
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    typing.innerText = errorData.error || "Error sending message";
-    return;
+  async function callApi(path) {
+    return fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message }),
+    });
   }
 
-  const data = await res.json();
-  typing.remove();
-  addMessage(data.reply, "bot");
+  try {
+    let res = await callApi("/.netlify/functions/chat");
 
-} catch (err) {
-typing.innerText = "Error...";
-}
+    if (res.status === 404) {
+      res = await callApi("/chat");
+    }
 
-chatBox.scrollTop = chatBox.scrollHeight;
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      typing.innerText = errorData.error || "Error sending message";
+      return;
+    }
+
+    const data = await res.json();
+    typing.remove();
+    addMessage(data.reply, "bot");
+
+  } catch (err) {
+    typing.innerText = "Error...";
+  }
 }
 
 function addMessage(text, type) {
