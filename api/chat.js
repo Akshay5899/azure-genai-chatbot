@@ -1,6 +1,13 @@
 import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const responsesPath = path.join(__dirname, "../responses.json");
+const responsesData = JSON.parse(fs.readFileSync(responsesPath, "utf8"));
+const cannedResponses = responsesData.responses;
+const dynamicResponses = responsesData.dynamic_responses;
 
 export default async function handler(req, res) {
   // Enable CORS
@@ -21,16 +28,10 @@ export default async function handler(req, res) {
   try {
     const { message } = req.body;
 
-    if (!message) {
+    if (typeof message !== 'string' || !message.trim()) {
       res.status(400).json({ error: 'Message is required' });
       return;
     }
-
-    // Load responses from external file
-    const responsesPath = path.join(process.cwd(), "responses.json");
-    const responsesData = JSON.parse(fs.readFileSync(responsesPath, "utf8"));
-    const cannedResponses = responsesData.responses;
-    const dynamicResponses = responsesData.dynamic_responses;
 
     const lowerMessage = message.toLowerCase().trim();
 
@@ -58,15 +59,29 @@ export default async function handler(req, res) {
     }
 
     // Use Azure OpenAI for other responses
+    const apiKey = process.env.AZURE_OPENAI_API_KEY;
+    const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
+    const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
+    const missing = [];
+
+    if (!apiKey) missing.push("AZURE_OPENAI_API_KEY");
+    if (!endpoint) missing.push("AZURE_OPENAI_ENDPOINT");
+    if (!deployment) missing.push("AZURE_OPENAI_DEPLOYMENT");
+
+    if (missing.length) {
+      throw new Error(`Missing required env vars: ${missing.join(", ")}`);
+    }
+
+    const normalizedEndpoint = endpoint.endsWith("/") ? endpoint : `${endpoint}/`;
     const client = new OpenAI({
-      apiKey: process.env.AZURE_OPENAI_API_KEY,
-      baseURL: `${process.env.AZURE_OPENAI_ENDPOINT}openai/deployments/${process.env.AZURE_OPENAI_DEPLOYMENT}`,
+      apiKey,
+      baseURL: `${normalizedEndpoint}openai/deployments/${deployment}`,
       defaultQuery: { "api-version": "2024-02-15-preview" },
-      defaultHeaders: { "api-key": process.env.AZURE_OPENAI_API_KEY },
+      defaultHeaders: { "api-key": apiKey },
     });
 
     const response = await client.chat.completions.create({
-      model: process.env.AZURE_OPENAI_DEPLOYMENT,
+      model: deployment,
       messages: [
         { role: "system", content: "You are a helpful AI assistant." },
         { role: "user", content: message }
@@ -74,10 +89,10 @@ export default async function handler(req, res) {
       max_tokens: 300,
     });
 
-    res.status(200).json({ reply: response.choices[0].message.content });
+    res.status(200).json({ reply: response.choices?.[0]?.message?.content ?? "No response returned" });
 
   } catch (error) {
     console.error("Error:", error);
-    res.status(500).json({ error: "Error occurred" });
+    res.status(500).json({ error: error instanceof Error ? error.message : "Error occurred" });
   }
 }

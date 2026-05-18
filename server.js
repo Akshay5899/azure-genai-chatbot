@@ -18,12 +18,29 @@ const responsesData = JSON.parse(fs.readFileSync(responsesPath, "utf8"));
 const cannedResponses = responsesData.responses;
 const dynamicResponses = responsesData.dynamic_responses;
 
-const client = new OpenAI({
-  apiKey: process.env.AZURE_OPENAI_API_KEY,
-  baseURL: `${process.env.AZURE_OPENAI_ENDPOINT}openai/deployments/${process.env.AZURE_OPENAI_DEPLOYMENT}`,
-  defaultQuery: { "api-version": "2024-02-15-preview" },
-  defaultHeaders: { "api-key": process.env.AZURE_OPENAI_API_KEY },
-});
+function createAzureClient() {
+  const apiKey = process.env.AZURE_OPENAI_API_KEY;
+  const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
+  const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
+  const missing = [];
+
+  if (!apiKey) missing.push("AZURE_OPENAI_API_KEY");
+  if (!endpoint) missing.push("AZURE_OPENAI_ENDPOINT");
+  if (!deployment) missing.push("AZURE_OPENAI_DEPLOYMENT");
+
+  if (missing.length) {
+    throw new Error(`Missing required env vars: ${missing.join(", ")}`);
+  }
+
+  const normalizedEndpoint = endpoint.endsWith("/") ? endpoint : `${endpoint}/`;
+
+  return new OpenAI({
+    apiKey,
+    baseURL: `${normalizedEndpoint}openai/deployments/${deployment}`,
+    defaultQuery: { "api-version": "2024-02-15-preview" },
+    defaultHeaders: { "api-key": apiKey },
+  });
+}
 
 app.post("/chat", async (req, res) => {
   const { message } = req.body;
@@ -54,6 +71,7 @@ app.post("/chat", async (req, res) => {
       }
     }
 
+    const client = createAzureClient();
     const response = await client.chat.completions.create({
       model: process.env.AZURE_OPENAI_DEPLOYMENT,
       messages: [
@@ -63,9 +81,10 @@ app.post("/chat", async (req, res) => {
       max_tokens: 300,
     });
 
-    res.json({ reply: response.choices[0].message.content });
+    res.json({ reply: response.choices?.[0]?.message?.content ?? "No response returned" });
   } catch (error) {
-    res.status(500).json({ error: "Error occurred" });
+    console.error(error);
+    res.status(500).json({ error: error instanceof Error ? error.message : "Error occurred" });
   }
 });
 
