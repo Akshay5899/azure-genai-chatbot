@@ -4,7 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const responsesPath = path.join(__dirname, "../../responses.json");
+const responsesPath = path.join(__dirname, "responses.json");
 const responsesData = JSON.parse(fs.readFileSync(responsesPath, "utf8"));
 const cannedResponses = responsesData.responses;
 const dynamicResponses = responsesData.dynamic_responses;
