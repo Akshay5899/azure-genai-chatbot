@@ -42,6 +42,34 @@ function getFallbackReply(message) {
   return `I can answer the built-in questions right now. Azure OpenAI is not configured for this deployment, so I can't generate a full AI response for: "${message}".`;
 }
 
+function parseBody(body) {
+  if (!body) {
+    return {};
+  }
+
+  if (typeof body === "string") {
+    try {
+      return JSON.parse(body);
+    } catch {
+      return {};
+    }
+  }
+
+  if (body instanceof Buffer) {
+    try {
+      return JSON.parse(body.toString("utf8"));
+    } catch {
+      return {};
+    }
+  }
+
+  if (typeof body === "object") {
+    return body;
+  }
+
+  return {};
+}
+
 export const handler = async (event) => {
   if (event.httpMethod === "OPTIONS") {
     return {
@@ -60,7 +88,7 @@ export const handler = async (event) => {
   }
 
   try {
-    const body = event.body ? JSON.parse(event.body) : {};
+    const body = parseBody(event.body);
     const message = body.message;
 
     if (typeof message !== "string" || !message.trim()) {

@@ -26,7 +26,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { message } = req.body;
+    const body = parseBody(req.body);
+    const { message } = body;
 
     if (typeof message !== 'string' || !message.trim()) {
       res.status(400).json({ error: 'Message is required' });

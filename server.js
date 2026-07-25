@@ -46,10 +46,40 @@ function getFallbackReply(message) {
   return `I can answer the built-in questions right now. Azure OpenAI is not configured for this deployment, so I can't generate a full AI response for: "${message}".`;
 }
 
+function parseBody(body) {
+  if (!body) {
+    return {};
+  }
+
+  if (typeof body === "string") {
+    try {
+      return JSON.parse(body);
+    } catch {
+      return {};
+    }
+  }
+
+  if (body instanceof Buffer) {
+    try {
+      return JSON.parse(body.toString("utf8"));
+    } catch {
+      return {};
+    }
+  }
+
+  if (typeof body === "object") {
+    return body;
+  }
+
+  return {};
+}
+
 app.post("/chat", async (req, res) => {
   const { message } = req.body;
 
   try {
+    const body = parseBody(req.body);
+    const { message } = body;
     const lowerMessage = message.toLowerCase().trim();
     
     // Check for canned responses
