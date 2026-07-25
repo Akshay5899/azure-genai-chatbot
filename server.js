@@ -29,7 +29,7 @@ function createAzureClient() {
   if (!deployment) missing.push("AZURE_OPENAI_DEPLOYMENT");
 
   if (missing.length) {
-    throw new Error(`Missing required env vars: ${missing.join(", ")}`);
+    return null;
   }
 
   const normalizedEndpoint = endpoint.endsWith("/") ? endpoint : `${endpoint}/`;
@@ -40,6 +40,10 @@ function createAzureClient() {
     defaultQuery: { "api-version": "2024-02-15-preview" },
     defaultHeaders: { "api-key": apiKey },
   });
+}
+
+function getFallbackReply(message) {
+  return `I can answer the built-in questions right now. Azure OpenAI is not configured for this deployment, so I can't generate a full AI response for: "${message}".`;
 }
 
 app.post("/chat", async (req, res) => {
@@ -72,16 +76,30 @@ app.post("/chat", async (req, res) => {
     }
 
     const client = createAzureClient();
-    const response = await client.chat.completions.create({
-      model: process.env.AZURE_OPENAI_DEPLOYMENT,
-      messages: [
-        { role: "system", content: "You are a helpful AI assistant." },
-        { role: "user", content: message }
-      ],
-      max_tokens: 300,
-    });
 
-    res.json({ reply: response.choices?.[0]?.message?.content ?? "No response returned" });
+    if (!client) {
+      res.json({ reply: getFallbackReply(message) });
+      return;
+    }
+
+    let reply;
+    try {
+      const response = await client.chat.completions.create({
+        model: process.env.AZURE_OPENAI_DEPLOYMENT,
+        messages: [
+          { role: "system", content: "You are a helpful AI assistant." },
+          { role: "user", content: message }
+        ],
+        max_tokens: 300,
+      });
+
+      reply = response.choices?.[0]?.message?.content ?? "No response returned";
+    } catch (aiError) {
+      console.error(aiError);
+      reply = getFallbackReply(message);
+    }
+
+    res.json({ reply });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error instanceof Error ? error.message : "Error occurred" });

@@ -26,7 +26,7 @@ function createAzureClient() {
   if (!deployment) missing.push("AZURE_OPENAI_DEPLOYMENT");
 
   if (missing.length) {
-    throw new Error(`Missing required env vars: ${missing.join(", ")}`);
+    return null;
   }
 
   const normalizedEndpoint = endpoint.endsWith("/") ? endpoint : `${endpoint}/`;
@@ -36,6 +36,10 @@ function createAzureClient() {
     defaultQuery: { "api-version": "2024-02-15-preview" },
     defaultHeaders: { "api-key": apiKey },
   });
+}
+
+function getFallbackReply(message) {
+  return `I can answer the built-in questions right now. Azure OpenAI is not configured for this deployment, so I can't generate a full AI response for: "${message}".`;
 }
 
 export const handler = async (event) => {
@@ -97,19 +101,36 @@ export const handler = async (event) => {
     }
 
     const client = createAzureClient();
-    const response = await client.chat.completions.create({
-      model: process.env.AZURE_OPENAI_DEPLOYMENT,
-      messages: [
-        { role: "system", content: "You are a helpful AI assistant." },
-        { role: "user", content: message },
-      ],
-      max_tokens: 300,
-    });
+
+    if (!client) {
+      return {
+        statusCode: 200,
+        headers: CORS_HEADERS,
+        body: JSON.stringify({ reply: getFallbackReply(message) }),
+      };
+    }
+
+    let reply;
+    try {
+      const response = await client.chat.completions.create({
+        model: process.env.AZURE_OPENAI_DEPLOYMENT,
+        messages: [
+          { role: "system", content: "You are a helpful AI assistant." },
+          { role: "user", content: message },
+        ],
+        max_tokens: 300,
+      });
+
+      reply = response.choices?.[0]?.message?.content ?? "No response returned";
+    } catch (aiError) {
+      console.error(aiError);
+      reply = getFallbackReply(message);
+    }
 
     return {
       statusCode: 200,
       headers: CORS_HEADERS,
-      body: JSON.stringify({ reply: response.choices?.[0]?.message?.content ?? "No response returned" }),
+      body: JSON.stringify({ reply }),
     };
   } catch (error) {
     console.error(error);

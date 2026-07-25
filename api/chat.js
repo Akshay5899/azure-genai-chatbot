@@ -69,7 +69,8 @@ export default async function handler(req, res) {
     if (!deployment) missing.push("AZURE_OPENAI_DEPLOYMENT");
 
     if (missing.length) {
-      throw new Error(`Missing required env vars: ${missing.join(", ")}`);
+      res.status(200).json({ reply: getFallbackReply(message) });
+      return;
     }
 
     const normalizedEndpoint = endpoint.endsWith("/") ? endpoint : `${endpoint}/`;
@@ -80,16 +81,24 @@ export default async function handler(req, res) {
       defaultHeaders: { "api-key": apiKey },
     });
 
-    const response = await client.chat.completions.create({
-      model: deployment,
-      messages: [
-        { role: "system", content: "You are a helpful AI assistant." },
-        { role: "user", content: message }
-      ],
-      max_tokens: 300,
-    });
+    let reply;
+    try {
+      const response = await client.chat.completions.create({
+        model: deployment,
+        messages: [
+          { role: "system", content: "You are a helpful AI assistant." },
+          { role: "user", content: message }
+        ],
+        max_tokens: 300,
+      });
 
-    res.status(200).json({ reply: response.choices?.[0]?.message?.content ?? "No response returned" });
+      reply = response.choices?.[0]?.message?.content ?? "No response returned";
+    } catch (aiError) {
+      console.error("Error:", aiError);
+      reply = getFallbackReply(message);
+    }
+
+    res.status(200).json({ reply });
 
   } catch (error) {
     console.error("Error:", error);
